@@ -75,6 +75,7 @@ namespace SelfCalibration
         private void ConfigureSelfCalibrationStepOperation()
         {
             var selfCalibrationOperationValueList = new List<string>();
+            selfCalibrationOperationValueList.Add("NPI Quick Range");
             selfCalibrationOperationValueList.Add("Perform Neccessary Self Calibration");
             selfCalibrationOperationValueList.Add("Perform All Self Calibration Step");
             selfCalibrationOperationValueList.Add("Omit IF Flatness Self Calibration");
@@ -150,17 +151,20 @@ namespace SelfCalibration
             switch (SelfCalibrationOperation)
             {
                 case 0:
+                    rfsaSession.Calibration.Self.SelfCalibrateRange(RfsaSelfCalibrationSteps.None, 1400e6, 6000e6, -60, 20);
+                    break;
+                case 1:
                     //Passing an empty array will ensure NI-RFSA perform all Self Calibration steps.
                     rfsaSession.Calibration.Self.SelfCalibrate(RfsaSelfCalibrationSteps.PreselectorAlignment);
                     break;
-                case 1:
+                case 2:
                     // Queries NI-RFSA for the valid calibration steps.
                     // Passing this value to the niRFSA Self Cal VI ensures valid calibration steps are not repeated,
                     // thus only calibrating necessary steps
                     rfsaSession.Calibration.Self.IsSelfCalibrationValid(out validSteps);
                     rfsaSession.Calibration.Self.SelfCalibrate(validSteps);
                     break;
-                case 2:
+                case 3:
                     // IF Flatness Self Calibration can take up to 15 minutes.
                     rfsaSession.Calibration.Self.SelfCalibrate(RfsaSelfCalibrationSteps.IFFlatness);
                     break;
