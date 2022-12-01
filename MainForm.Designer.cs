@@ -41,6 +41,9 @@
             this.label3 = new System.Windows.Forms.Label();
             this.label4 = new System.Windows.Forms.Label();
             this.indicatorLabel = new System.Windows.Forms.Label();
+            this.cbxDCCalibration = new System.Windows.Forms.CheckBox();
+            this.lbxDCs = new System.Windows.Forms.ListBox();
+            this.lblSATemp = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
             // resourceNameComboBox
@@ -125,7 +128,7 @@
             this.label2.Size = new System.Drawing.Size(666, 13);
             this.label2.TabIndex = 31;
             this.label2.Text = "For the NI 5665, the PXI backplane and the LO must share a common Reference clock" +
-                ". You can share this clock signal in one of two ways.";
+    ". You can share this clock signal in one of two ways.";
             // 
             // label3
             // 
@@ -136,7 +139,7 @@
             this.label3.Size = new System.Drawing.Size(496, 13);
             this.label3.TabIndex = 32;
             this.label3.Text = "- Configure OnboardClock and route the 10 MHz Reference clock out of the LO into " +
-                "the PXI backplane.";
+    "the PXI backplane.";
             // 
             // label4
             // 
@@ -147,7 +150,7 @@
             this.label4.Size = new System.Drawing.Size(446, 13);
             this.label4.TabIndex = 33;
             this.label4.Text = "- Configure PXI_CLK and provide an external 10 MHz Reference clock to the PXI bac" +
-                "kplane.";
+    "kplane.";
             // 
             // indicatorLabel
             // 
@@ -157,12 +160,45 @@
             this.indicatorLabel.Size = new System.Drawing.Size(114, 30);
             this.indicatorLabel.TabIndex = 34;
             // 
+            // cbxDCCalibration
+            // 
+            this.cbxDCCalibration.AutoSize = true;
+            this.cbxDCCalibration.Checked = true;
+            this.cbxDCCalibration.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.cbxDCCalibration.Location = new System.Drawing.Point(233, 21);
+            this.cbxDCCalibration.Name = "cbxDCCalibration";
+            this.cbxDCCalibration.Size = new System.Drawing.Size(93, 17);
+            this.cbxDCCalibration.TabIndex = 36;
+            this.cbxDCCalibration.Text = "DC Calibration";
+            this.cbxDCCalibration.UseVisualStyleBackColor = true;
+            // 
+            // lbxDCs
+            // 
+            this.lbxDCs.FormattingEnabled = true;
+            this.lbxDCs.Location = new System.Drawing.Point(233, 44);
+            this.lbxDCs.Name = "lbxDCs";
+            this.lbxDCs.Size = new System.Drawing.Size(143, 134);
+            this.lbxDCs.TabIndex = 37;
+            // 
+            // lblSATemp
+            // 
+            this.lblSATemp.AutoSize = true;
+            this.lblSATemp.Font = new System.Drawing.Font("Microsoft Sans Serif", 21.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblSATemp.Location = new System.Drawing.Point(382, 98);
+            this.lblSATemp.Name = "lblSATemp";
+            this.lblSATemp.Size = new System.Drawing.Size(249, 33);
+            this.lblSATemp.TabIndex = 38;
+            this.lblSATemp.Text = "SA: {0}C SG: {1}C";
+            // 
             // MainForm
             // 
             this.AcceptButton = this.startButton;
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(693, 286);
+            this.Controls.Add(this.lblSATemp);
+            this.Controls.Add(this.lbxDCs);
+            this.Controls.Add(this.cbxDCCalibration);
             this.Controls.Add(this.indicatorLabel);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.label3);
@@ -200,6 +236,9 @@
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label indicatorLabel;
+        private System.Windows.Forms.CheckBox cbxDCCalibration;
+        private System.Windows.Forms.ListBox lbxDCs;
+        private System.Windows.Forms.Label lblSATemp;
     }
 }
 
