@@ -8,37 +8,37 @@
 *
 * Description:
 *   Use this example to learn how to do self calibration for the NI-RFSA.
-                         
 
 * Instructions for running:
-*   1. Configure both RFSA device in the MAX for the program to run. 
+*   1. Configure both RFSA device in the MAX for the program to run.
 *
 *	2. Configure the Clock Source in the UI.
-*   
+*
 *   3. Configure the Self Calibration Step Operation.
 *
 *   4. Select the Start Button in the UI to start the self-calibration.
-*   
+*
 *   5. The data is displayed in the DataGrid.
 *
 * I/O Connections Overview:
 *   Make sure your signal input terminals match the Physical Channel I/O
 *   Controls.  If you have a PXI chassis, ensure that it has been properly
-*   identified in MAX.  
+*   identified in MAX.
 *
 *******************************************************************************/
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+
 using NationalInstruments.ModularInstruments.NIDCPower;
 using NationalInstruments.ModularInstruments.NIRfsa;
 using NationalInstruments.ModularInstruments.NIRfsg;
 using NationalInstruments.ModularInstruments.SystemServices.DeviceServices;
 using NationalInstruments.RFmx.InstrMX;
 using NationalInstruments.SystemConfiguration;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace SelfCalibration
 {
@@ -46,7 +46,9 @@ namespace SelfCalibration
     {
         private NIRfsa rfsaSession;
         private NIRfsg rfsgSession;
-        RFmxInstrMX vst;
+        private RFmxInstrMX vst;
+        public Dictionary<string, cDeviceInfo> DeviceCollection = new Dictionary<string, cDeviceInfo>();
+        private double MaxFreq = 2700e6;
 
         public MainForm()
         {
@@ -64,15 +66,43 @@ namespace SelfCalibration
             ModularInstrumentsSystem modularInstrumentsSystem = new ModularInstrumentsSystem("NI-RFSA");
 
             foreach (DeviceInfo device in modularInstrumentsSystem.DeviceCollection)
+            {
                 resourceNameComboBox.Items.Add(device.Name);
+                DeviceInfo mq = device;
+                DeviceCollection[mq.Name.ToUpper()] = new cDeviceInfo(mq.BusNumber, mq.ChassisNumber, mq.Model, mq.Name, mq.SerialNumber, mq.SlotNumber, mq.SocketNumber);
+            }
             if (modularInstrumentsSystem.DeviceCollection.Count > 0)
                 resourceNameComboBox.SelectedIndex = 0;
-
 
             ModularInstrumentsSystem _dcPowerLists = new ModularInstrumentsSystem("NI-DCPower");
             foreach (DeviceInfo _dc in _dcPowerLists.DeviceCollection)
             {
                 lbxDCs.Items.Add(_dc.Name);
+            }
+        }
+
+        public class cDeviceInfo
+        {
+            public int BusNumber, ChassisNumber;
+            public string Model, Name, SerialNumber;
+            public int SlotNumber, SocketNumber;
+
+            /// <param name="busNumber"></param>
+            /// <param name="chassisNumber"></param>
+            /// <param name="model"></param>
+            /// <param name="name">VisaAlias</param>
+            /// <param name="serialNumber"></param>
+            /// <param name="slotNumber"></param>
+            /// <param name="socketNumber"></param>
+            public cDeviceInfo(int busNumber, int chassisNumber, string model, string name, string serialNumber, int slotNumber, int socketNumber)
+            {
+                BusNumber = busNumber;
+                ChassisNumber = chassisNumber;
+                Model = model;
+                Name = name;
+                SerialNumber = serialNumber;
+                SlotNumber = slotNumber;
+                SocketNumber = socketNumber;
             }
         }
 
@@ -99,7 +129,7 @@ namespace SelfCalibration
             selfCalibrationComboBox.DataSource = selfCalibrationOperationValueList;
         }
 
-        #endregion
+        #endregion Initial Configuration
 
         #region UI Gets
 
@@ -127,26 +157,29 @@ namespace SelfCalibration
             }
         }
 
-        #endregion
+        #endregion UI Gets
 
         private void InitializeRfsaSession()
         {
             CloseSession();
             RFMXExtension.ConfigureDebugSettings(ResourceName, false, false);
 
-            rfsgSession = new NIRfsg(ResourceName, false, false, "DriverSetup=Bitfile:NI-RFIC.lvbitx");
-            vst = new RFmxInstrMX(ResourceName, "DriverSetup=Bitfile:NI-RFIC.lvbitx");
+            rfsgSession = new NIRfsg(ResourceName, false, false, string.Empty);// "DriverSetup=Bitfile:NI-RFIC.lvbitx");
+            vst = new RFmxInstrMX(ResourceName, string.Empty);// "DriverSetup=Bitfile:NI-RFIC.lvbitx");
             vst.DangerousGetNIRfsaHandle(out IntPtr niRfsaHandle);
             rfsaSession = new NIRfsa(niRfsaHandle);
 
             rfsaSession.DriverOperation.Warning += new System.EventHandler<RfsaWarningEventArgs>(SADriverOperationWarning);
             rfsgSession.DriverOperation.Warning += new System.EventHandler<RfsgWarningEventArgs>(SGDriverOperationWarning);
+
+            MaxFreq = DeviceCollection[ResourceName.ToUpper()].Model == "NI PXIe-5842" ? 23000e6 : 6000e6;
         }
 
         private void SADriverOperationWarning(object sender, RfsaWarningEventArgs e)
         {
             MessageBox.Show(e.Warning.ToString(), "Warning");
         }
+
         private void SGDriverOperationWarning(object sender, RfsgWarningEventArgs e)
         {
             MessageBox.Show(e.Warning.ToString(), "Warning");
@@ -178,6 +211,7 @@ namespace SelfCalibration
         private void ConfigureSelfCalibration()
         {
             List<NIDCPower> m_DC = new List<NIDCPower>();
+            List<Task> threadDCList = new List<Task>();
 
             if (cbxDCCalibration.Checked)
             {
@@ -187,32 +221,35 @@ namespace SelfCalibration
                 }
             }
 
+            double satemp = rfsaSession.DeviceCharacteristics.GetDeviceTemperature();
+            double sgtemp = rfsgSession.DeviceCharacteristics.DeviceTemperature;
+            TemperatureAlignFlag(satemp, 0);
+            lblSATemp.Text = string.Format("SA: {0:F4}C\r\nSG: {1:F4}C", satemp, sgtemp);
+            Application.DoEvents();
+
+            if (cbxDCCalibration.Checked)
+            {
+                foreach (var _dc in m_DC)
+                {
+                    threadDCList.Add(Task.Factory.StartNew(() => { _dc.Calibration.Self.SelfCalibrate(string.Empty); }));
+                }
+            }
+
             RfsaSelfCalibrationSteps validSteps;
             switch (SelfCalibrationOperation)
             {
                 case 0:
-                    double satemp = rfsaSession.DeviceCharacteristics.GetDeviceTemperature();
-                    double sgtemp = rfsgSession.DeviceCharacteristics.DeviceTemperature;
-                    TemperatureAlignFlag(satemp, 0);
-                    lblSATemp.Text = string.Format("SA: {0:F4}C\r\nSG: {1:F4}C", satemp, sgtemp);
-                    Application.DoEvents();
 
-                    if (cbxDCCalibration.Checked)
-                    {
-                        foreach (var _dc in m_DC)
-                        {
-                            _dc.Calibration.Self.SelfCalibrate(string.Empty);
-                        }
-                    }
-
-                    rfsaSession.Calibration.Self.SelfCalibrateRange(RfsaSelfCalibrationSteps.None, 1400e6, 6000e6, -60, 20);
+                    rfsaSession.Calibration.Self.SelfCalibrateRange(RfsaSelfCalibrationSteps.None, 1400e6, MaxFreq, -60, 20);
                     rfsgSession.Calibration.Self.SelfCalibrateRange(RfsgSelfCalibrationSteps.OmitNone, 1400e6, 2700e6, -40, 0);
 
                     break;
+
                 case 1:
                     //Passing an empty array will ensure NI-RFSA perform all Self Calibration steps.
                     rfsaSession.Calibration.Self.SelfCalibrate(RfsaSelfCalibrationSteps.PreselectorAlignment);
                     break;
+
                 case 2:
                     // Queries NI-RFSA for the valid calibration steps.
                     // Passing this value to the niRFSA Self Cal VI ensures valid calibration steps are not repeated,
@@ -220,11 +257,14 @@ namespace SelfCalibration
                     rfsaSession.Calibration.Self.IsSelfCalibrationValid(out validSteps);
                     rfsaSession.Calibration.Self.SelfCalibrate(validSteps);
                     break;
+
                 case 3:
                     // IF Flatness Self Calibration can take up to 15 minutes.
                     rfsaSession.Calibration.Self.SelfCalibrate(RfsaSelfCalibrationSteps.IFFlatness);
                     break;
             }
+
+            Task.WaitAll(threadDCList.ToArray());
         }
 
         public bool TemperatureAlignFlag(double EquipmentTemperature, byte site) //return true to force alignment
@@ -240,7 +280,6 @@ namespace SelfCalibration
             }
             return true; //force cal
         }
-
 
         private void ChangeControlState(bool state)
         {
@@ -291,12 +330,10 @@ namespace SelfCalibration
                 message = "Unexpected Error";
             MessageBox.Show(message, "Error"); ;
         }
-
     }
 
     public static class RFMXExtension
     {
-
         public static void ConfigureDebugSettings(string aliasName, bool requestedValueDebugEnabled, bool requestedValueCBreakPointsEnabled)
         {
             const int noOfRetries = 100;
