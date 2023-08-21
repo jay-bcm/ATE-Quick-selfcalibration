@@ -27,16 +27,19 @@
 *
 *******************************************************************************/
 
+using Jay.CommonLibrary.Addin;
 using NationalInstruments.ModularInstruments.NIDCPower;
 using NationalInstruments.ModularInstruments.NIRfsa;
 using NationalInstruments.ModularInstruments.NIRfsg;
 using NationalInstruments.ModularInstruments.SystemServices.DeviceServices;
 using NationalInstruments.RFmx.InstrMX;
 using NationalInstruments.SystemConfiguration;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -211,7 +214,7 @@ namespace SelfCalibration
         private void ConfigureSelfCalibration()
         {
             List<NIDCPower> m_DC = new List<NIDCPower>();
-            List<Task> threadDCList = new List<Task>();
+            List<Task> threadRun = new List<Task>();
 
             if (cbxDCCalibration.Checked)
             {
@@ -221,17 +224,19 @@ namespace SelfCalibration
                 }
             }
 
-            double satemp = rfsaSession.DeviceCharacteristics.GetDeviceTemperature();
-            double sgtemp = rfsgSession.DeviceCharacteristics.DeviceTemperature;
-            TemperatureAlignFlag(satemp, 0);
-            lblSATemp.Text = string.Format("SA: {0:F4}C\r\nSG: {1:F4}C", satemp, sgtemp);
+            TemperatureAlignFlag(0, 0);
             Application.DoEvents();
 
             if (cbxDCCalibration.Checked)
             {
                 foreach (var _dc in m_DC)
                 {
-                    threadDCList.Add(Task.Factory.StartNew(() => { _dc.Calibration.Self.SelfCalibrate(string.Empty); }));
+                    threadRun.Add(Task.Factory.StartNew(() =>
+                    {
+                        _dc.Calibration.Self.SelfCalibrate(string.Empty);
+                        _dc.Close();
+                        _dc.Dispose();
+                    }));
                 }
             }
 
@@ -242,7 +247,6 @@ namespace SelfCalibration
 
                     rfsaSession.Calibration.Self.SelfCalibrateRange(RfsaSelfCalibrationSteps.None, 1400e6, MaxFreq, -60, 20);
                     rfsgSession.Calibration.Self.SelfCalibrateRange(RfsgSelfCalibrationSteps.OmitNone, 1400e6, 2700e6, -40, 0);
-
                     break;
 
                 case 1:
@@ -264,21 +268,111 @@ namespace SelfCalibration
                     break;
             }
 
-            Task.WaitAll(threadDCList.ToArray());
+            Task.WaitAll(threadRun.ToArray());
+        }
+
+        public class TemperatureAlignData
+        {
+            public DateTime CalibrationDate { get; set; }
+            public double PreviousTemperature_SA { get; set; }
+            public double PreviousTemperature_SG { get; set; }
+            public double EquipmentTemperature_SA { get; set; }
+            public double EquipmentTemperature_SG { get; set; }
+            public double ForceAlignmentDelta { get; set; }
+            public string InstrumentInfo { get; set; }
+            public byte Site { get; set; }
+        }
+
+        public class TemperatureAlignDataCollection
+        {
+            public List<TemperatureAlignData> Data;
         }
 
         public bool TemperatureAlignFlag(double EquipmentTemperature, byte site) //return true to force alignment
         {
-            //FileInfo TempFile;
-            StreamWriter swTempFile;
-            string TempLogLocation = $@"C:\Avago.ATF.Common\Input\TemperatureLog_{site}.txt";
+            var vstdevice = DeviceCollection[ResourceName.ToUpper()];
+            double satemp = rfsaSession.DeviceCharacteristics.GetDeviceTemperature();
+            double sgtemp = rfsgSession.DeviceCharacteristics.DeviceTemperature;
+            lblSATemp.Text = string.Format("SA: {0:F4}C\r\nSG: {1:F4}C", satemp, sgtemp);
+            string TempLogLocation = $@"C:\Avago.ATF.Common\Input\TemperatureLog.json";
+            string _InstrumentInfo = $"VST{site} = {vstdevice.Name}*{vstdevice.SerialNumber}; ";
 
-            //Create temperature file
-            using (swTempFile = new StreamWriter(TempLogLocation, false))
+            TemperatureAlignDataCollection deserializedCollection;
+            DateTime dtCalibrationDate = DateTime.Now;
+
+            //Directory.CreateDirectory(Directory.GetParent(TempLogLocation).FullName);
+            bool TemperatureFileExist = (File.Exists(TempLogLocation) ? true : false);
+
+            if (!TemperatureFileExist)
             {
-                swTempFile.WriteLine(EquipmentTemperature);
+                deserializedCollection = new TemperatureAlignDataCollection() { Data = new List<TemperatureAlignData>() };
+                deserializedCollection.Data.Add(new TemperatureAlignData()
+                {
+                    CalibrationDate = dtCalibrationDate,
+                    PreviousTemperature_SA = double.NaN,
+                    PreviousTemperature_SG = double.NaN,
+                    EquipmentTemperature_SA = satemp,
+                    EquipmentTemperature_SG = sgtemp,
+                    ForceAlignmentDelta = 1.0,
+                    InstrumentInfo = _InstrumentInfo,
+                    Site = site
+                });
+
+                string updatedJson = JsonConvert.SerializeObject(deserializedCollection, Formatting.Indented);
+                File.WriteAllText(TempLogLocation, updatedJson);
             }
-            return true; //force cal
+            else
+            {
+                // Read the JSON data from the file
+                string json = File.ReadAllText(TempLogLocation);
+
+                // Deserialize the JSON back to the SensorData object
+                deserializedCollection = JsonConvert.DeserializeObject<TemperatureAlignDataCollection>(json);
+                if (deserializedCollection == null) deserializedCollection = new TemperatureAlignDataCollection() { Data = new List<TemperatureAlignData>() };
+                else if (deserializedCollection.Data == null) deserializedCollection.Data = new List<TemperatureAlignData>();
+
+                var CurrentTemperatureAlignmentData = deserializedCollection.Data.Where(d => d.InstrumentInfo.CIvEquals(_InstrumentInfo) && d.Site == site);
+
+                if (CurrentTemperatureAlignmentData.CountOrNull() == 0)
+                {
+                    deserializedCollection.Data.Add(new TemperatureAlignData()
+                    {
+                        CalibrationDate = dtCalibrationDate,
+                        PreviousTemperature_SA = double.NaN,
+                        PreviousTemperature_SG = double.NaN,
+                        EquipmentTemperature_SA = satemp,
+                        EquipmentTemperature_SG = sgtemp,
+                        ForceAlignmentDelta = 1.0,
+                        InstrumentInfo = _InstrumentInfo,
+                        Site = site
+                    });
+
+                    string updatedJson = JsonConvert.SerializeObject(deserializedCollection, Formatting.Indented);
+                    File.WriteAllText(TempLogLocation, updatedJson);
+                }
+                else
+                {
+                    var data = CurrentTemperatureAlignmentData.First();
+                    var previousTemperature = data.EquipmentTemperature_SA;
+
+                    //Force alignment if temperature delta > setting
+                    {
+                        data.CalibrationDate = dtCalibrationDate;
+                        data.PreviousTemperature_SA = data.EquipmentTemperature_SA;
+                        data.PreviousTemperature_SG = data.EquipmentTemperature_SG;
+                        data.EquipmentTemperature_SA = satemp;
+                        data.EquipmentTemperature_SG = sgtemp;
+                        data.ForceAlignmentDelta = 1.0;
+                        data.InstrumentInfo = data.InstrumentInfo;
+                        data.Site = site;
+
+                        string updatedJson = JsonConvert.SerializeObject(deserializedCollection, Formatting.Indented);
+                        File.WriteAllText(TempLogLocation, updatedJson);
+                    }
+                }
+            }
+
+            return true;
         }
 
         private void ChangeControlState(bool state)
