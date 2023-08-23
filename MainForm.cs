@@ -51,7 +51,6 @@ namespace SelfCalibration
         private NIRfsg rfsgSession;
         private RFmxInstrMX vst;
         public Dictionary<string, cDeviceInfo> DeviceCollection = new Dictionary<string, cDeviceInfo>();
-        private double MaxFreq = 2700e6;
 
         public MainForm()
         {
@@ -174,8 +173,6 @@ namespace SelfCalibration
 
             rfsaSession.DriverOperation.Warning += new System.EventHandler<RfsaWarningEventArgs>(SADriverOperationWarning);
             rfsgSession.DriverOperation.Warning += new System.EventHandler<RfsgWarningEventArgs>(SGDriverOperationWarning);
-
-            MaxFreq = DeviceCollection[ResourceName.ToUpper()].Model == "NI PXIe-5842" ? 23000e6 : 6000e6;
         }
 
         private void SADriverOperationWarning(object sender, RfsaWarningEventArgs e)
@@ -245,8 +242,8 @@ namespace SelfCalibration
             {
                 case 0:
 
-                    rfsaSession.Calibration.Self.SelfCalibrateRange(RfsaSelfCalibrationSteps.None, 1400e6, MaxFreq, -60, 20);
-                    rfsgSession.Calibration.Self.SelfCalibrateRange(RfsgSelfCalibrationSteps.OmitNone, 1400e6, 2700e6, -40, 0);
+                    rfsaSession.Calibration.Self.SelfCalibrateRange(RfsaSelfCalibrationSteps.None, 1400e6, double.PositiveInfinity, -60, double.PositiveInfinity);
+                    rfsgSession.Calibration.Self.SelfCalibrateRange(RfsgSelfCalibrationSteps.OmitNone, 1400e6, 2700e6, double.NegativeInfinity, double.PositiveInfinity);
                     break;
 
                 case 1:
