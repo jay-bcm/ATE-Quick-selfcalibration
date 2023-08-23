@@ -362,7 +362,7 @@ namespace SelfCalibration
                         data.PreviousTemperature_SG = data.EquipmentTemperature_SG;
                         data.EquipmentTemperature_SA = satemp;
                         data.EquipmentTemperature_SG = sgtemp;
-                        data.ForceAlignmentDelta = 1.0;
+                        data.ForceAlignmentDelta = data.ForceAlignmentDelta;
                         data.InstrumentInfo = data.InstrumentInfo;
                         data.Site = site;
 
