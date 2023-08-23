@@ -295,7 +295,7 @@ namespace SelfCalibration
             double sgtemp = rfsgSession.DeviceCharacteristics.DeviceTemperature;
             lblSATemp.Text = string.Format("SA: {0:F4}C\r\nSG: {1:F4}C", satemp, sgtemp);
             string TempLogLocation = $@"C:\Avago.ATF.Common\Input\TemperatureLog.json";
-            string _InstrumentInfo = $"VST{site} = {vstdevice.Name}*{vstdevice.SerialNumber}; ";
+            string _InstrumentInfo = $"VST{site} = {vstdevice.Model}*{vstdevice.SerialNumber}; ";
 
             TemperatureAlignDataCollection deserializedCollection;
             DateTime dtCalibrationDate = DateTime.Now;
